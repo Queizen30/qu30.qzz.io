@@ -14,3 +14,15 @@ body {
   padding: 20px;
   border-radius: 20px;
 }
+
+a:link {
+  color: #0a84ff;
+}
+
+a:visited {
+  color: #bf5af2;
+}
+
+a:hover, a:active {
+  color: #ffa07a
+}
