@@ -24,6 +24,11 @@ body {
   border-radius: 20px;
 }
 
+.box-t a {
+  text-decoration: none;
+  color: #FFFFFF;
+}
+
 footer {
   justify-content: center;
   background-color: #2C2C2E;
