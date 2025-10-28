@@ -41,6 +41,10 @@ footer {
   bottom: 0;
 }
 
+st {
+  font-weight: thick;
+}
+
 a:link {
   color: #0a84ff;
 }
