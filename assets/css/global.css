@@ -24,10 +24,6 @@ body {
   border-radius: 20px;
 }
 
-.sel-a {
-  text-decoration: none;
-  color: #FFFFFF;
-}
 
 footer {
   justify-content: center;
@@ -45,11 +41,11 @@ st {
   font-weight: thick;
 }
 
-.button {
-background-color: #04AA6D;
-border: none;
-color: white;
-padding: 15px 32px;
+.sel-a {
+ background-color: #04AA6D;
+ border: none;
+ color: white;
+ padding: 15px 32px;
 text-align: center;
 text-decoration: none;
 display: inline-block;
