@@ -53,7 +53,7 @@ st {
  border-radius: 20px;
 }
 
-sel-a a:link {
+a.sel-a:link {
   color: #FFFFFF;
 }
 
