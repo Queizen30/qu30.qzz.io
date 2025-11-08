@@ -50,8 +50,11 @@ st {
  font-size: 16px;
  margin: 4px 2px;
  cursor: pointer;
- color: white;
  border-radius: 20px;
+}
+
+sel-a a:link {
+  color: #FFFFFF;
 }
 
 a:link {
