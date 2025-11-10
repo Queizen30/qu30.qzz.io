@@ -78,3 +78,7 @@ button {
   border-radius: 20px;
   box-shadow: 10px 10px 20px #5c5c5c;
 }
+
+button:hover {
+  translate: translateY(5px);
+}
