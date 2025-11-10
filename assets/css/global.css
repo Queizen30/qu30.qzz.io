@@ -57,6 +57,10 @@ a.sel-a:link {
   color: #FFFFFF;
 }
 
+.sel-a a:link {
+  color: #FFFFFF
+}
+
 a:link {
   color: #0a84ff;
 }
