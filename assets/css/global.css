@@ -3,7 +3,7 @@ body {
   align-items: center;
   background-color: #000000;
   color: #FFFFFF;
-  font-size: 80%;
+  font-size: 90%;
 }
 
 .box-s {
@@ -43,7 +43,7 @@ st {
 
 .sel-a {
   background-color: #2C2C2E;
-  font-size: 150%;
+  font-size: 110%;
   border: none;
   padding: 15px 32px;
   text-decoration: none;
