@@ -73,13 +73,13 @@ a:hover, a:active {
   color: #ffa07a
 }
 
-button {
+.button {
   background-color: #FFFFFF;
   border-radius: 20px;
   box-shadow: 10px 10px 20px #5c5c5c;
   margin: auto;
 }
 
-button:hover {
+.button:hover {
   translate: translateY(-5px);
 }
