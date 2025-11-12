@@ -6,6 +6,11 @@ body {
   font-size: 90%;
 }
 
+.seo {
+    display: none;
+    visibility: hidden;
+}
+
 .box-s {
   background-color: #1C1C1E;
   width: auto;
