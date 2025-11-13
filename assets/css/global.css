@@ -7,8 +7,8 @@ body {
 }
 
 .seo {
-    display: none;
-    visibility: hidden;
+  display: none;
+  visibility: hidden;
 }
 
 .box-s {
@@ -50,7 +50,7 @@ st {
   background-color: #2C2C2E;
   font-size: 110%;
   border: none;
-  padding: 15px 32px;
+  padding: 5px 20px;
   text-decoration: none;
   display: inline-block;
   margin: 4px 2px;
