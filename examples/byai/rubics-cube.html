@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rubik's Cube - Three.js</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      min-height: 100vh;
+      overflow: hidden;
+    }
+    #container {
+      width: 100vw;
+      height: 100vh;
+      display: block;
+    }
+    #controls {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 15px;
+      z-index: 100;
+    }
+    button {
+      padding: 12px 24px;
+      font-size: 16px;
+      font-weight: bold;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    #scrambleBtn {
+      background: linear-gradient(135deg, #ff6b6b, #ee5a5a);
+      color: white;
+    }
+    #scrambleBtn:hover {
+      background: linear-gradient(135deg, #ff5252, #e04343);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 15px rgba(255, 107, 107, 0.4);
+    }
+    #solveBtn {
+      background: linear-gradient(135deg, #4ecdc4, #44a3a0);
+      color: white;
+    }
+    #solveBtn:hover {
+      background: linear-gradient(135deg, #44b8b0, #3a918e);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 15px rgba(78, 205, 196, 0.4);
+    }
+    #resetBtn {
+      background: linear-gradient(135deg, #a8a8a8, #888);
+      color: white;
+    }
+    #resetBtn:hover {
+      background: linear-gradient(135deg, #999, #777);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 15px rgba(168, 168, 168, 0.4);
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none !important;
+      box-shadow: none !important;
+    }
+    #status {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      padding: 15px 30px;
+      border-radius: 10px;
+      font-size: 18px;
+      z-index: 100;
+      text-align: center;
+      min-width: 200px;
+    }
+    #status .state {
+      font-weight: bold;
+      font-size: 20px;
+      margin-bottom: 5px;
+    }
+    #status .moves {
+      font-size: 14px;
+      opacity: 0.8;
+    }
+  </style>
+</head>
+<body>
+  <div id="container"></div>
+  <div id="status">
+    <div class="state">Loading...</div>
+    <div class="moves">Moves: 0</div>
+  </div>
+  <div id="controls">
+    <button id="scrambleBtn" disabled>Scramble</button>
+    <button id="solveBtn" disabled>Solve</button>
+    <button id="resetBtn" disabled>Reset</button>
+  </div>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    // Constants
+    const CUBIE_SIZE = 1;
+    const GAP = 0.02;
+    const STICKER_OFFSET = 0.01;
+    const STICKER_SIZE = 0.85;
+    const ANIMATION_DURATION = 300;
+
+    // Face colors (standard Rubik's cube colors)
+    const COLORS = {
+      U: 0xffffff, // White (Up)
+      D: 0xffff00, // Yellow (Down)
+      F: 0x00ff00, // Green (Front)
+      B: 0x0000ff, // Blue (Back)
+      R: 0xff0000, // Red (Right)
+      L: 0xff8c00  // Orange (Left)
+    };
+
+    const BODY_COLOR = 0x111111;
+    const CORE_COLOR = 0x000000;
+
+    // Scene setup
+    let scene, camera, renderer, controls;
+    let cubeGroup;
+    let cubies = [];
+    let moveHistory = [];
+    let isAnimating = false;
+    let moveQueue = [];
+    let idleRotation = true;
+
+    // DOM elements
+    const container = document.getElementById('container');
+    const statusEl = document.getElementById('status');
+    const stateEl = statusEl.querySelector('.state');
+    const movesEl = statusEl.querySelector('.moves');
+    const scrambleBtn = document.getElementById('scrambleBtn');
+    const solveBtn = document.getElementById('solveBtn');
+    const resetBtn = document.getElementById('resetBtn');
+
+    // Initialize
+    init();
+    animate();
+
+    function init() {
+      // Scene
+      scene = new THREE.Scene();
+
+      // Camera
+      camera = new THREE.PerspectiveCamera(
+        50,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        1000
+      );
+      camera.position.set(5, 4, 5);
+
+      // Renderer
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(window.devicePixelRatio);
+      renderer.setClearColor(0x1a1a2e);
+      container.appendChild(renderer.domElement);
+
+      // Controls
+      controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+      controls.minDistance = 5;
+      controls.maxDistance = 15;
+
+      // Create cube group
+      cubeGroup = new THREE.Group();
+      scene.add(cubeGroup);
+
+      // Create core cube to block interior visibility
+      const coreGeometry = new THREE.BoxGeometry(2.5, 2.5, 2.5);
+      const coreMaterial = new THREE.MeshBasicMaterial({ color: CORE_COLOR });
+      const coreCube = new THREE.Mesh(coreGeometry, coreMaterial);
+      cubeGroup.add(coreCube);
+
+      // Create cubies
+      createCubies();
+
+      // Event listeners
+      window.addEventListener('resize', onWindowResize);
+      scrambleBtn.addEventListener('click', scramble);
+      solveBtn.addEventListener('click', solve);
+      resetBtn.addEventListener('click', reset);
+
+      // Enable buttons and update status
+      updateStatus('Ready', 0);
+      enableButtons();
+
+      // Auto-scramble on load after a short delay
+      setTimeout(() => {
+        scramble().then(() => {
+          // Auto-solve after scramble
+          setTimeout(solve, 1000);
+        });
+      }, 1000);
+    }
+
+    function createCubies() {
+      // Clear existing cubies
+      cubies.forEach(cubie => cubeGroup.remove(cubie));
+      cubies = [];
+
+      // Create 27 cubies (3x3x3)
+      for (let x = -1; x <= 1; x++) {
+        for (let y = -1; y <= 1; y++) {
+          for (let z = -1; z <= 1; z++) {
+            // Skip the core (center cubie)
+            if (x === 0 && y === 0 && z === 0) continue;
+
+            const cubie = createCubie(x, y, z);
+            cubie.userData.originalPosition = { x, y, z };
+            cubie.userData.currentPosition = { x, y, z };
+            cubies.push(cubie);
+            cubeGroup.add(cubie);
+          }
+        }
+      }
+    }
+
+    function createCubie(x, y, z) {
+      const cubieGroup = new THREE.Group();
+      cubieGroup.position.set(
+        x * (CUBIE_SIZE + GAP),
+        y * (CUBIE_SIZE + GAP),
+        z * (CUBIE_SIZE + GAP)
+      );
+
+      // Create dark body
+      const bodyGeometry = new THREE.BoxGeometry(CUBIE_SIZE, CUBIE_SIZE, CUBIE_SIZE);
+      const bodyMaterial = new THREE.MeshBasicMaterial({ color: BODY_COLOR });
+      const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+      cubieGroup.add(body);
+
+      // Add edge outlines
+      const edges = new THREE.EdgesGeometry(bodyGeometry);
+      const lineMaterial = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
+      const wireframe = new THREE.LineSegments(edges, lineMaterial);
+      cubieGroup.add(wireframe);
+
+      // Add stickers on exposed faces
+      // Right face (x = 1)
+      if (x === 1) addSticker(cubieGroup, 'R', 1, 0, 0, 0, Math.PI / 2, 0);
+      // Left face (x = -1)
+      if (x === -1) addSticker(cubieGroup, 'L', -1, 0, 0, 0, -Math.PI / 2, 0);
+      // Up face (y = 1)
+      if (y === 1) addSticker(cubieGroup, 'U', 0, 1, 0, -Math.PI / 2, 0, 0);
+      // Down face (y = -1)
+      if (y === -1) addSticker(cubieGroup, 'D', 0, -1, 0, Math.PI / 2, 0, 0);
+      // Front face (z = 1)
+      if (z === 1) addSticker(cubieGroup, 'F', 0, 0, 1, 0, 0, 0);
+      // Back face (z = -1)
+      if (z === -1) addSticker(cubieGroup, 'B', 0, 0, -1, 0, Math.PI, 0);
+
+      return cubieGroup;
+    }
+
+    function addSticker(parent, face, offsetX, offsetY, offsetZ, rotX, rotY, rotZ) {
+      const stickerGeometry = new THREE.PlaneGeometry(STICKER_SIZE, STICKER_SIZE);
+      const stickerMaterial = new THREE.MeshBasicMaterial({
+        color: COLORS[face],
+        side: THREE.FrontSide // Only render front side (outward-facing)
+      });
+      const sticker = new THREE.Mesh(stickerGeometry, stickerMaterial);
+
+      // Position slightly offset from the cube surface
+      const offset = CUBIE_SIZE / 2 + STICKER_OFFSET;
+      sticker.position.set(
+        offsetX * offset,
+        offsetY * offset,
+        offsetZ * offset
+      );
+
+      // Rotate to face outward
+      sticker.rotation.set(rotX, rotY, rotZ);
+
+      parent.add(sticker);
+    }
+
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      // Gentle idle rotation when not animating
+      if (idleRotation && !isAnimating && moveQueue.length === 0) {
+        cubeGroup.rotation.y += 0.002;
+      }
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    // Face rotation logic
+    const FACES = {
+      U: { axis: 'y', layer: 1, direction: -1 },
+      D: { axis: 'y', layer: -1, direction: 1 },
+      F: { axis: 'z', layer: 1, direction: -1 },
+      B: { axis: 'z', layer: -1, direction: 1 },
+      R: { axis: 'x', layer: 1, direction: -1 },
+      L: { axis: 'x', layer: -1, direction: 1 }
+    };
+
+    function getCubiesOnFace(face) {
+      const { axis, layer } = FACES[face];
+      return cubies.filter(cubie => {
+        const pos = cubie.userData.currentPosition;
+        return Math.round(pos[axis]) === layer;
+      });
+    }
+
+    function rotateFace(face, clockwise = true, double = false) {
+      return new Promise(resolve => {
+        if (isAnimating) {
+          moveQueue.push({ face, clockwise, double, resolve });
+          return;
+        }
+
+        isAnimating = true;
+        idleRotation = false;
+
+        const faceData = FACES[face];
+        const faceCubies = getCubiesOnFace(face);
+        const angle = (clockwise ? -1 : 1) * faceData.direction * Math.PI / 2 * (double ? 2 : 1);
+
+        // Create temporary group for rotation
+        const tempGroup = new THREE.Group();
+        scene.add(tempGroup);
+
+        // Move cubies to temp group
+        faceCubies.forEach(cubie => {
+          const worldPos = new THREE.Vector3();
+          cubie.getWorldPosition(worldPos);
+          cubeGroup.remove(cubie);
+          tempGroup.add(cubie);
+          cubie.position.copy(worldPos);
+        });
+
+        // Animate rotation
+        const startRotation = 0;
+        const endRotation = angle;
+        const startTime = Date.now();
+
+        function animateRotation() {
+          const elapsed = Date.now() - startTime;
+          const progress = Math.min(elapsed / ANIMATION_DURATION, 1);
+
+          // Easing function (ease-in-out)
+          const eased = progress < 0.5
+            ? 2 * progress * progress
+            : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+
+          const currentRotation = startRotation + (endRotation - startRotation) * eased;
+
+          if (faceData.axis === 'x') tempGroup.rotation.x = currentRotation;
+          else if (faceData.axis === 'y') tempGroup.rotation.y = currentRotation;
+          else tempGroup.rotation.z = currentRotation;
+
+          if (progress < 1) {
+            requestAnimationFrame(animateRotation);
+          } else {
+            // Animation complete - update positions
+            faceCubies.forEach(cubie => {
+              // Get world position and rotation
+              const worldPos = new THREE.Vector3();
+              const worldQuat = new THREE.Quaternion();
+              cubie.getWorldPosition(worldPos);
+              cubie.getWorldQuaternion(worldQuat);
+
+              // Remove from temp group
+              tempGroup.remove(cubie);
+
+              // Add back to cube group
+              cubeGroup.add(cubie);
+
+              // Convert world position back to local
+              const localPos = worldPos.clone();
+              cubeGroup.worldToLocal(localPos);
+              cubie.position.copy(localPos);
+              cubie.quaternion.copy(worldQuat);
+
+              // Normalize to cubie group's local rotation
+              cubeGroup.getWorldQuaternion(worldQuat);
+              cubie.quaternion.premultiply(worldQuat.invert());
+
+              // Update current position tracking
+              cubie.userData.currentPosition = {
+                x: Math.round(cubie.position.x / (CUBIE_SIZE + GAP)),
+                y: Math.round(cubie.position.y / (CUBIE_SIZE + GAP)),
+                z: Math.round(cubie.position.z / (CUBIE_SIZE + GAP))
+              };
+            });
+
+            scene.remove(tempGroup);
+            isAnimating = false;
+
+            // Process next move in queue
+            if (moveQueue.length > 0) {
+              const nextMove = moveQueue.shift();
+              rotateFace(nextMove.face, nextMove.clockwise, nextMove.double)
+                .then(nextMove.resolve);
+            } else {
+              idleRotation = true;
+            }
+
+            resolve();
+          }
+        }
+
+        animateRotation();
+      });
+    }
+
+    function parseMove(move) {
+      const face = move[0];
+      const isPrime = move.includes("'");
+      const isDouble = move.includes('2');
+      return { face, clockwise: !isPrime, double: isDouble };
+    }
+
+    async function executeMoves(moves, recordHistory = true) {
+      for (const move of moves) {
+        const { face, clockwise, double } = parseMove(move);
+        if (recordHistory) {
+          moveHistory.push(move);
+          movesEl.textContent = `Moves: ${moveHistory.length}`;
+        }
+        await rotateFace(face, clockwise, double);
+      }
+    }
+
+    function generateScramble(length = 20) {
+      const faces = ['U', 'D', 'F', 'B', 'R', 'L'];
+      const modifiers = ['', "'", '2'];
+      const moves = [];
+      let lastFace = '';
+
+      for (let i = 0; i < length; i++) {
+        let face;
+        let attempts = 0;
+        const maxAttempts = 10;
+        do {
+          face = faces[Math.floor(Math.random() * faces.length)];
+          attempts++;
+        } while (face === lastFace && attempts < maxAttempts && faces.length > 1);
+
+        const modifier = modifiers[Math.floor(Math.random() * modifiers.length)];
+        moves.push(face + modifier);
+        lastFace = face;
+      }
+
+      return moves;
+    }
+
+    function getInverseMove(move) {
+      const face = move[0];
+      if (move.includes('2')) return move; // Double moves are self-inverse
+      if (move.includes("'")) return face; // Prime becomes normal
+      return face + "'"; // Normal becomes prime
+    }
+
+    async function scramble() {
+      if (isAnimating || moveQueue.length > 0) return;
+
+      disableButtons();
+      moveHistory = [];
+      updateStatus('Scrambling...', 0);
+
+      const scrambleMoves = generateScramble(20);
+      await executeMoves(scrambleMoves);
+
+      updateStatus('Scrambled', moveHistory.length);
+      enableButtons();
+    }
+
+    async function solve() {
+      if (isAnimating || moveQueue.length > 0) return;
+      if (moveHistory.length === 0) return;
+
+      disableButtons();
+      updateStatus('Solving...', moveHistory.length);
+
+      // Reverse the scramble - keep a copy in case of interruption
+      const solveMoves = moveHistory.slice().reverse().map(getInverseMove);
+      const originalHistory = moveHistory.slice();
+      
+      try {
+        for (const move of solveMoves) {
+          const { face, clockwise, double } = parseMove(move);
+          await rotateFace(face, clockwise, double);
+        }
+        // Clear history only after successful completion
+        moveHistory = [];
+        updateStatus('Solved!', 0);
+      } catch (error) {
+        // Restore history if solve fails
+        moveHistory = originalHistory;
+        updateStatus('Solve failed', moveHistory.length);
+      }
+      enableButtons();
+    }
+
+    function reset() {
+      if (isAnimating || moveQueue.length > 0) return;
+
+      disableButtons();
+      moveHistory = [];
+
+      // Remove all cubies and recreate
+      createCubies();
+
+      updateStatus('Ready', 0);
+      enableButtons();
+    }
+
+    function updateStatus(state, moves) {
+      stateEl.textContent = state;
+      movesEl.textContent = `Moves: ${moves}`;
+    }
+
+    function enableButtons() {
+      scrambleBtn.disabled = false;
+      solveBtn.disabled = moveHistory.length === 0;
+      resetBtn.disabled = false;
+    }
+
+    function disableButtons() {
+      scrambleBtn.disabled = true;
+      solveBtn.disabled = true;
+      resetBtn.disabled = true;
+    }
+  </script>
+</body>
+</html>
