@@ -130,6 +130,7 @@
     const STICKER_OFFSET = 0.01;
     const STICKER_SIZE = 0.85;
     const ANIMATION_DURATION = 300;
+    const HALF_PI = Math.PI / 2;
 
     // Face colors (standard Rubik's cube colors)
     const COLORS = {
@@ -143,6 +144,13 @@
 
     const BODY_COLOR = 0x111111;
     const CORE_COLOR = 0x000000;
+
+    // Pre-defined axis vectors for rotation
+    const AXIS_VECTORS = {
+      x: new THREE.Vector3(1, 0, 0),
+      y: new THREE.Vector3(0, 1, 0),
+      z: new THREE.Vector3(0, 0, 1)
+    };
 
     // Scene setup
     let scene, camera, renderer, controls;
@@ -354,24 +362,20 @@
 
         const faceData = FACES[face];
         const faceCubies = getCubiesOnFace(face);
-        const angle = (clockwise ? -1 : 1) * faceData.direction * Math.PI / 2 * (double ? 2 : 1);
+        const angle = (clockwise ? -1 : 1) * faceData.direction * HALF_PI * (double ? 2 : 1);
 
-        // Create temporary group for rotation
-        const tempGroup = new THREE.Group();
-        scene.add(tempGroup);
+        // Store original positions relative to cubeGroup for each cubie
+        const cubieData = faceCubies.map(cubie => ({
+          cubie,
+          startPos: cubie.position.clone(),
+          startQuat: cubie.quaternion.clone()
+        }));
 
-        // Move cubies to temp group
-        faceCubies.forEach(cubie => {
-          const worldPos = new THREE.Vector3();
-          cubie.getWorldPosition(worldPos);
-          cubeGroup.remove(cubie);
-          tempGroup.add(cubie);
-          cubie.position.copy(worldPos);
-        });
+        // Use pre-defined axis vector for rotation
+        const rotationAxis = AXIS_VECTORS[faceData.axis];
+        const fullRotationQuat = new THREE.Quaternion().setFromAxisAngle(rotationAxis, angle);
 
         // Animate rotation
-        const startRotation = 0;
-        const endRotation = angle;
         const startTime = Date.now();
 
         function animateRotation() {
@@ -383,48 +387,48 @@
             ? 2 * progress * progress
             : 1 - Math.pow(-2 * progress + 2, 2) / 2;
 
-          const currentRotation = startRotation + (endRotation - startRotation) * eased;
+          // Interpolate rotation
+          const currentQuat = new THREE.Quaternion().setFromAxisAngle(rotationAxis, angle * eased);
 
-          if (faceData.axis === 'x') tempGroup.rotation.x = currentRotation;
-          else if (faceData.axis === 'y') tempGroup.rotation.y = currentRotation;
-          else tempGroup.rotation.z = currentRotation;
+          // Apply rotation to each cubie
+          cubieData.forEach(({ cubie, startPos, startQuat }) => {
+            // Rotate position around origin
+            const newPos = startPos.clone().applyQuaternion(currentQuat);
+            cubie.position.copy(newPos);
+
+            // Rotate orientation
+            const newQuat = currentQuat.clone().multiply(startQuat);
+            cubie.quaternion.copy(newQuat);
+          });
 
           if (progress < 1) {
             requestAnimationFrame(animateRotation);
           } else {
-            // Animation complete - update positions
-            faceCubies.forEach(cubie => {
-              // Get world position and rotation
-              const worldPos = new THREE.Vector3();
-              const worldQuat = new THREE.Quaternion();
-              cubie.getWorldPosition(worldPos);
-              cubie.getWorldQuaternion(worldQuat);
+            // Animation complete - snap to exact positions and orientations
+            cubieData.forEach(({ cubie, startPos, startQuat }) => {
+              // Apply full rotation to position
+              const newPos = startPos.clone().applyQuaternion(fullRotationQuat);
+              
+              // Snap position to grid
+              const gridSize = CUBIE_SIZE + GAP;
+              cubie.position.set(
+                Math.round(newPos.x / gridSize) * gridSize,
+                Math.round(newPos.y / gridSize) * gridSize,
+                Math.round(newPos.z / gridSize) * gridSize
+              );
 
-              // Remove from temp group
-              tempGroup.remove(cubie);
-
-              // Add back to cube group
-              cubeGroup.add(cubie);
-
-              // Convert world position back to local
-              const localPos = worldPos.clone();
-              cubeGroup.worldToLocal(localPos);
-              cubie.position.copy(localPos);
-              cubie.quaternion.copy(worldQuat);
-
-              // Normalize to cubie group's local rotation
-              cubeGroup.getWorldQuaternion(worldQuat);
-              cubie.quaternion.premultiply(worldQuat.invert());
+              // Apply full rotation to orientation and normalize
+              const newQuat = fullRotationQuat.clone().multiply(startQuat);
+              cubie.quaternion.copy(snapQuaternion(newQuat));
 
               // Update current position tracking
               cubie.userData.currentPosition = {
-                x: Math.round(cubie.position.x / (CUBIE_SIZE + GAP)),
-                y: Math.round(cubie.position.y / (CUBIE_SIZE + GAP)),
-                z: Math.round(cubie.position.z / (CUBIE_SIZE + GAP))
+                x: Math.round(cubie.position.x / gridSize),
+                y: Math.round(cubie.position.y / gridSize),
+                z: Math.round(cubie.position.z / gridSize)
               };
             });
 
-            scene.remove(tempGroup);
             isAnimating = false;
 
             // Process next move in queue
@@ -442,6 +446,20 @@
 
         animateRotation();
       });
+    }
+
+    // Reusable objects for snapQuaternion to avoid repeated allocations
+    const _snapEuler = new THREE.Euler();
+    const _snapQuat = new THREE.Quaternion();
+
+    // Snap quaternion to nearest 90-degree rotation to prevent drift
+    function snapQuaternion(q) {
+      // Convert to euler angles, snap to 90 degrees, convert back
+      _snapEuler.setFromQuaternion(q);
+      _snapEuler.x = Math.round(_snapEuler.x / HALF_PI) * HALF_PI;
+      _snapEuler.y = Math.round(_snapEuler.y / HALF_PI) * HALF_PI;
+      _snapEuler.z = Math.round(_snapEuler.z / HALF_PI) * HALF_PI;
+      return _snapQuat.setFromEuler(_snapEuler).clone();
     }
 
     function parseMove(move) {
